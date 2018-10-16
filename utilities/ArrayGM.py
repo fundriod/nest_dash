@@ -10,9 +10,6 @@ from pprint import pprint as pp
 
 
 log = logging.getLogger()
-log.addHandler(log_handler.StreamHandler())
-log.addHandler(log_handler.FileHandler())
-log.setLevel('INFO')
 
 
 class GenericError(Exception):
@@ -25,7 +22,7 @@ class GenericError(Exception):
         return "GenericError(host: {!r} exc: {!r} reason: {})".format(self.args[0], self.args[1], self.args[2])
 
 
-class OpObj:
+class GetObj:
 
     def __init__(self, hostname, username, password):
         self._hostname = hostname
@@ -38,7 +35,8 @@ class OpObj:
 
         try:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
-                      command="vol --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3, $5, $8}'" % vol_regex)
+                      command="vol --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3, $5, $8}'"
+                              % vol_regex)
 
         except GenericError as e:
             raise e
@@ -51,7 +49,7 @@ class OpObj:
                 return vollist
 
         finally:
-
+            log.info("test line to check logger")
             log.debug("ran successfully")
 
     #
@@ -62,7 +60,8 @@ class OpObj:
 
         try:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
-                      command="snap --list --all | sed '1,/--+--/d'| awk '{print $1, $2, $3, $4, $5, $7}'")
+                      command="snap --list --all | sed '1,/--+--/d'| grep -i '%s' | "
+                              "awk '{print $1, $2, $3, $4, $5, $7}'" % vol_regex)
         except GenericError as e:
             raise e
 
@@ -72,12 +71,9 @@ class OpObj:
             if out['data']:
                 snaplist = [snap(*item.split()) for item in out['data']]
 
-                if (vol_regex and vol_regex != '') and (snap_regex and snap_regex != ''):
-                    return list(filter(lambda each: snap_regex in each.snap_name and vol_regex in each.vol_name, snaplist))
-                elif snap_regex and snap_regex != '':
+                if snap_regex and snap_regex != '':
                     return list(filter(lambda each: snap_regex in each.snap_name, snaplist))
-                elif vol_regex and vol_regex != '':
-                    return list(filter(lambda each: vol_regex in each.vol_name, snaplist))
+
                 else:
                     return snaplist
 
@@ -90,7 +86,8 @@ class OpObj:
 
         try:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
-                      command="initiatorgrp --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3}'" % client_regex)
+                      command="initiatorgrp --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3}'"
+                              % client_regex)
 
         except GenericError as e:
             raise e
@@ -111,7 +108,8 @@ class OpObj:
 
         try:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
-                      command="pool --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3, $4 }'" % pool_regex)
+                      command="pool --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3, $4 }'"
+                              % pool_regex)
         except GenericError as e:
             raise e
         else:
@@ -130,7 +128,8 @@ class OpObj:
 
         try:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
-                      command="volcoll --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3}'" % volcoll_regex)
+                      command="volcoll --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3}'"
+                              % volcoll_regex)
         except GenericError as e:
             raise e
         else:
@@ -148,7 +147,8 @@ class OpObj:
     def get_arraylist(self, array_regex=None, *args):
         try:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
-                      command="array --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3, $4, $5}'" % array_regex)
+                      command="array --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3, $4, $5}'"
+                              % array_regex)
         except GenericError as e:
             raise e
         else:
@@ -164,7 +164,7 @@ class OpObj:
     #
     def get_disklist(self, array_regex=None, disk_regex=None, *args):
         disklist = []
-        arrays = OpObj.get_arraylist(self, array_regex=array_regex)
+        arrays = GetObj.get_arraylist(self, array_regex=array_regex)
 
         if arrays is None:
             log.error("get_arraylist: No valid array return with string: %s from host : %s" % (array_regex,
@@ -206,7 +206,7 @@ class OpObj:
     #
     def get_ctrlrlist(self, array_regex=None, *args):
         ctrlrlist = []
-        arrays = OpObj.get_arraylist(self, array_regex=array_regex)
+        arrays = GetObj.get_arraylist(self, array_regex=array_regex)
         if arrays is None:
             log.error("get_arraylist: No valid array return with string: %s from host : %s" %
                       (array_regex, self._hostname))
@@ -239,13 +239,45 @@ class OpObj:
         finally:
             log.debug("ran successfully")
 
+    #
+    #
+    def get_perfpolicy(self, policy_arg=None, *args):
+        try:
+            out = ssh(hostname=self._hostname, username=self._username, password=self._password,
+                      command="perfpolicy --list | sed '1,/--+--/d' | cut -d  ' ' -f 1-4 | grep -i '%s'" % policy_arg)
+        except GenericError as e:
+                raise e
+        else:
+            group_dict = [item.strip() for item in out['data']]
+            return group_dict
+        finally:
+            log.debug("ran successfully")
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='OpMod', description='OpMod to execute operation on (group leader) using ssh')
+
+    log.addHandler(log_handler.StreamHandler())
+    log.addHandler(log_handler.FileHandler())
+    log.setLevel('INFO')
+    parser = argparse.ArgumentParser(prog='Array Get Module',
+                                     description='OpMod to execute operation on (group leader) using ssh')
 
     parser.add_argument("action", choices=["get_vollist", "get_snaplist", "get_initiatorlist", "get_poollist",
-                                           "get_volcolllist", "get_arraylist", "get_arraylist", "get_disklist", "get_iplist",
-                                           "get_ctrlrlist", "get_groupinfo"], help="Action to be preformed")
+                                           "get_volcolllist", "get_arraylist", "get_arraylist", "get_disklist",
+                                           "get_iplist", "get_ctrlrlist", "get_groupinfo", "get_perfpolicy"],
+                        help="""
+                        get_vollist --regex_csv vol_regex,
+                        get_snaplist --regex_csv vol_regex,snap_regex,
+                        get_initiatorlist --regex_csv client_regex,
+                        get_poollist --regex_csv pool_regex,
+                        get_volcolllist --regex_csv volcoll_regex,
+                        get_arraylist --regex_csv array_regex,
+                        get_disklist --regex_csv array_regex, disk_regex,
+                        get_iplist --regex_csv array_regex,
+                        get_ctrlrlist --regex_csv array_regex,
+                        get_groupinfo --regex_csv field_arg
+                        get_perfpolicy --regex_csv policy_arg
+                        """)
 
     parser.add_argument('-n', '--hostname', default=None, type=str, required=True,
                         help=' FQN of array to connect !! REQUIRED ARGUMENT !! DEFAULT: None')
@@ -256,15 +288,15 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--password', default='admin', type=str, required=False,
                         help=' Password of given user, DEFAULT: admin')
 
-    parser.add_argument('-l', '--log_level', default='ERROR', type=str, required=False,
-                        help=' Stdout log level, DEFAULT: ERROR (options: DEBUG,INFO,WARNING,ERROR,CRITICAL)')
+    parser.add_argument('-l', '--log_level', default='WARNING', type=str, required=False,
+                        help=' Stdout log level, DEFAULT: WARNING (options: DEBUG,INFO,WARNING,ERROR,CRITICAL)')
 
     parser.add_argument('-r', '--regex_csv', default=',', type=str, required=False,
                         help=' SSH command to execute, DEFAULT: ,')
 
     args = parser.parse_args()
     log.setLevel(args.log_level.upper())
-    obj = OpObj(hostname=args.hostname, username=args.username, password=args.password)
+    obj = GetObj(hostname=args.hostname, username=args.username, password=args.password)
 
     def run_func(action=args.action):
         inst = getattr(obj, action)
