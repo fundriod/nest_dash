@@ -256,6 +256,8 @@ class GetObj:
 
 if __name__ == "__main__":
 
+    #
+    # setting logger only if called direct.
     log.addHandler(log_handler.StreamHandler())
     log.addHandler(log_handler.FileHandler())
     log.setLevel('INFO')
