@@ -6,6 +6,7 @@ import itertools
 import argparse
 import log_handler
 from ArrayCM import ssh as ssh
+from ArrayCM import rest as rest
 from pprint import pprint as pp
 
 
@@ -49,7 +50,6 @@ class GetObj:
                 return vollist
 
         finally:
-            log.info("test line to check logger")
             log.debug("ran successfully")
 
     #
@@ -127,20 +127,26 @@ class GetObj:
     def get_volcolllist(self, volcoll_regex=None, *args):
 
         try:
-            out = ssh(hostname=self._hostname, username=self._username, password=self._password,
-                      command="volcoll --list | sed '1,/--+--/d'| grep -i '%s' | awk '{print $1, $2, $3}'"
-                              % volcoll_regex)
+            out = rest(hostname=self._hostname, username=self._username, password=self._password,
+                       endpoint='volume_collections/detail')
         except GenericError as e:
             raise e
         else:
-            volcoll = collections.namedtuple('volcoll', ['volcoll_name', 'app_sync', 'owned_by'])
+            volcoll = collections.namedtuple('volcoll', ['volcoll_name', 'replication_partner', 'replication_type', ])
             volcoll.__new__.__defaults__ = (None,)
+            item_list = list()
             if out['data']:
-                volcolllist = [volcoll(*item.split()) for item in out['data']]
-                return volcolllist
+                for each_volcoll in out['data']:
+                    ret_dict = dict()
+                    ret_dict['full_name'] = each_volcoll['full_name']
+                    ret_dict['replication_partner'] = each_volcoll['replication_partner']
+                    ret_dict['replication_type'] = each_volcoll['replication_type']
+                    if volcoll_regex in ret_dict['full_name']:
+                        item_list.append([ret_dict[item] for item in sorted(ret_dict.keys())])
+                ret_list = [volcoll(*item) for item in item_list]
+                return ret_list if len(ret_list) > 0 else None
         finally:
-
-            log.debug("ran successfully")
+                log.debug("ran successfully")
 
     #
     #
@@ -168,7 +174,7 @@ class GetObj:
 
         if arrays is None:
             log.error("get_arraylist: No valid array return with string: %s from host : %s" % (array_regex,
-                      self._hostname))
+                                                                                               self._hostname))
             return None
         for array in arrays:
             try:
@@ -232,7 +238,7 @@ class GetObj:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
                       command="group --info | grep -i '%s'" % field_arg)
         except GenericError as e:
-                raise e
+            raise e
         else:
             group_dict = [(item.split(':')[0], item.strip().split(':')[1].strip()) for item in out['data']]
             return group_dict
@@ -246,7 +252,7 @@ class GetObj:
             out = ssh(hostname=self._hostname, username=self._username, password=self._password,
                       command="perfpolicy --list | sed '1,/--+--/d' | cut -d  ' ' -f 1-4 | grep -i '%s'" % policy_arg)
         except GenericError as e:
-                raise e
+            raise e
         else:
             group_dict = [item.strip() for item in out['data']]
             return group_dict
@@ -256,17 +262,13 @@ class GetObj:
 
 if __name__ == "__main__":
 
-    #
-    # setting logger only if called direct.
-    log.addHandler(log_handler.StreamHandler())
-    log.addHandler(log_handler.FileHandler())
-    log.setLevel('INFO')
     parser = argparse.ArgumentParser(prog='Array Get Module',
                                      description='OpMod to execute operation on (group leader) using ssh')
 
     parser.add_argument("action", choices=["get_vollist", "get_snaplist", "get_initiatorlist", "get_poollist",
                                            "get_volcolllist", "get_arraylist", "get_arraylist", "get_disklist",
-                                           "get_iplist", "get_ctrlrlist", "get_groupinfo", "get_perfpolicy"],
+                                           "get_iplist", "get_ctrlrlist", "get_groupinfo", "get_perfpolicy",
+                                           ],
                         help="""
                         get_vollist --regex_csv vol_regex,
                         get_snaplist --regex_csv vol_regex,snap_regex,
@@ -277,8 +279,9 @@ if __name__ == "__main__":
                         get_disklist --regex_csv array_regex, disk_regex,
                         get_iplist --regex_csv array_regex,
                         get_ctrlrlist --regex_csv array_regex,
-                        get_groupinfo --regex_csv field_arg
+                        get_groupinfo --regex_csv field_arg,
                         get_perfpolicy --regex_csv policy_arg
+                        
                         """)
 
     parser.add_argument('-n', '--hostname', default=None, type=str, required=True,
@@ -297,7 +300,15 @@ if __name__ == "__main__":
                         help=' SSH command to execute, DEFAULT: ,')
 
     args = parser.parse_args()
+
+    #
+    # setting logger only if called direct.
+    # todo only stream handler is needed for direct run.
+    # log.addHandler(log_handler.FileHandler())
+    # log.setLevel('INFO')
+    log.addHandler(log_handler.StreamHandler())
     log.setLevel(args.log_level.upper())
+
     obj = GetObj(hostname=args.hostname, username=args.username, password=args.password)
 
     def run_func(action=args.action):
