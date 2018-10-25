@@ -38,11 +38,22 @@ def ssh(hostname=None, command=None, username=None, password=None,):
         else:
             std_in, std_out, std_err = _ssh.exec_command(command)
             std_in.flush()
-            output = std_out.readlines()
-            stderr = std_err.readlines()
-            log.debug('_cli_ SSHClient: {!r} SSH_stdout:\n{}'.format(hostname, ''.join(output)))
+            _output = std_out.readlines()
+            stdret = std_err.readlines()
+            out_info = None
+            out_error = None
+            out_unknown = None
+            if stdret:
+                if (stdret[0]).split(':')[0] == 'INFO':
+                    out_info = stdret
+                elif (stdret[0]).split(':')[0] == 'ERROR':
+                    out_error = stdret
+                else:
+                    out_unknown = stdret
+
+            log.debug('_cli_ SSHClient: {!r} SSH_stdout:\n{}'.format(hostname, ''.join(_output)))
             log.info("SSH:: {} with command: {} - executed successfully".format(hostname, command))
-            return dict(host=hostname, data=output, error=stderr)
+            return dict(host=hostname, data=_output, info=out_info, error=out_error, unknown=out_unknown)
         finally:
             _ssh.close()
 
@@ -133,11 +144,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Setting basic Logger with custom handles
+    #
+    # setting logger only if called direct.
     log.addHandler(log_handler.StreamHandler())
-    # log.addHandler(log_handler.FileHandler())
-
-    # setting log level based of input args
     log.setLevel(args.log_level.upper())
 
     if args.action == "ssh":
