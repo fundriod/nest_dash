@@ -279,6 +279,64 @@ class GetObj:
 
         return list(itertools.chain(*all_proc_list))
 
+    #
+    #
+    def get_volmove(self, vol_regex=None,  *args):
+        try:
+            out = ssh(hostname=self._hostname, username=self._username, password=self._password,
+                      command="vol --list --moving | sed '1,/--+--/d' | grep -i '%s' | awk '{print $1, $2, $3, $5, $8}'"
+                              % vol_regex)
+        except GenericError as e:
+            raise e
+        else:
+            volmove = collections.namedtuple('volmove', ['name', 'size', 'online', 'usage', 'path'])
+            volmove.__new__.__defaults__ = (None,)
+            if out['data']:
+                move_list = [volmove(*item.split()) for item in out['data']]
+                return move_list
+        finally:
+            log.debug("ran successfully")
+
+    #
+    #
+    def rest_vollist(self, vol_regex=None, *args):
+        try:
+            out = rest(hostname=self._hostname, username=self._username, password=self._password,
+                       endpoint='volumes/detail')
+        except GenericError as e:
+            raise e
+        else:
+            vol = collections.namedtuple('vol', ['acl','clone', 'dest_pool', 'full', 'name', 'online', 'parent_vol',
+                                                 'pool','stats', 'usage', 'volcoll',])
+            vol.__new__.__defaults__ = (None,)
+            item_list = list()
+            if out['data']:
+                for each_vol in out['data']:
+                    ret_dict = dict()
+                    ret_dict['name'] = each_vol['name']
+                    ret_dict['clone'] = each_vol['clone']
+                    ret_dict['full'] = each_vol['full_name']
+                    ret_dict['volcoll'] = each_vol['volcoll_name']
+                    ret_dict['online'] = each_vol['online']
+                    ret_dict['pool'] = each_vol['pool_name']
+                    ret_dict['parent_vol'] = each_vol['parent_vol_name']
+                    ret_dict['stats'] = each_vol['avg_stats_last_5mins']
+                    ret_dict['dest_pool'] = each_vol['dest_pool_name']
+                    ret_dict['usage'] = each_vol['total_usage_bytes']
+                    if each_vol['access_control_records'] is not None:
+                        access_list = list()
+                        for initiator in each_vol['access_control_records']:
+                            access_list.append(initiator['initiator_group_name']+':/'+str(initiator['lun']))
+                        ret_dict['acl'] = access_list
+
+                    if vol_regex in ret_dict['name']:
+                        item_list.append([ret_dict[item] for item in sorted(ret_dict.keys())])
+                ret_list = [vol(*item) for item in item_list]
+                return ret_list if len(ret_list) > 0 else None
+        finally:
+                log.debug("ran successfully")
+
+
 
 if __name__ == "__main__":
 
@@ -288,7 +346,7 @@ if __name__ == "__main__":
     parser.add_argument("action", choices=["get_vollist", "get_snaplist", "get_initiatorlist", "get_poollist",
                                            "get_volcolllist", "get_arraylist", "get_arraylist", "get_disklist",
                                            "get_iplist", "get_ctrlrlist", "get_groupinfo", "get_perfpolicy","get_nsproc",
-                                           ],
+                                           "get_volmove","rest_vollist"],
                         help="""
                         get_vollist --regex_csv vol_regex,
                         get_snaplist --regex_csv vol_regex,snap_regex,
@@ -299,9 +357,11 @@ if __name__ == "__main__":
                         get_disklist --regex_csv array_regex, disk_regex,
                         get_iplist --regex_csv array_regex,
                         get_ctrlrlist --regex_csv array_regex,
-                        get_groupinfo --regex_csv field_arg,
-                        get_perfpolicy --regex_csv policy_arg
-                        get_nsproc --regex_csv nsproc_arg
+                        get_groupinfo --regex_csv field_arg, 
+                        get_perfpolicy --regex_csv policy_arg,
+                        get_nsproc --regex_csv nsproc_arg,
+                        get_volmove --regex_csv vol_regex,
+                        rest_vollist --regex_csv vol_regex
                         
                         """)
 
