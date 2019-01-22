@@ -81,23 +81,29 @@ def wip_ssh_pass(hostname=None, command=None, username=None, password=None,):
             return dict(host=hostname, data=output)
 
 
-def rest(hostname=None, endpoint=None, username=None, password=None):
+def rest(hostname=None, endpoint=None, username=None, password=None, action=None):
     assert hostname and endpoint and username and password, "ArrayCM.rest requires valid args"
 
-    def request(url=None, headers=None, json=None, verify=False):
-        if headers is not None:
-            log.debug('_rest_ url: {!r} header: {!r} json: {!r}'.format(url, headers, json))
+    def request(url=None, headers=None, json=None, verify=False, verb=action):
+        # pp(verb)
+        if verb.upper() == 'GET':
+            log.debug('_rest_get_ url: {!r} header: {!r} json: {!r}'.format(url, headers, json))
             # return requests.post(url, json=json, headers=headers, verify=verify)
             return requests.get(url, json=json, headers=headers, verify=verify)
+        elif verb.upper() == 'POST':
+            log.debug('_rest_post_ url: {!r} header: {!r} json: {!r}'.format(url, headers, json))
+            # return requests.get(url, json=json, headers=headers, verify=verify)
+            return requests.post(url, json=json, headers=headers, verify=verify)
         else:
-            log.debug('_rest_ url: {!r} json: {!r}'.format(url, json))
-            return requests.post(url, json=json, verify=verify)
+            log.error('_rest_invalid url: {!r} json: {!r} - failed with no request verb'.format(url, json))
+            return False
 
     def get_token():
         url = 'https://{}:5392/v1/tokens'.format(hostname)
         data = dict(data={"username": username, "password": password})
         try:
-            response = request(url=url, json=data)
+            # response = request(url=url, json=data)
+            response = requests.post(url, json=data, verify=False)
         except (TimeoutError, requests.exceptions.ConnectionError) as e:
             raise GenericError(hostname, endpoint, e)
         else:
@@ -110,8 +116,9 @@ def rest(hostname=None, endpoint=None, username=None, password=None):
         url = "https://{}:5392/v1/{}".format(hostname, endpoint)
         header = {'X-Auth-Token': get_token()}
         log.debug('_rest_ url: {!r} endpoint: {!r}'.format(url, endpoint))
-        response = request(url=url, headers=header, json={"operationType": "fetch"})
-        if response.status_code == 200:
+        response = request(url=url, headers=header, json={"operationType": "fetch"}, verb=action)
+        # pp(response)
+        if response.status_code == 200 or 202:
             log.info("REST:: {} with endpoint: {} - executed successfully".format(hostname, endpoint))
         return response.json()
 
@@ -141,6 +148,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-e', '--endpoint', default='groups', type=str, required=False,
                         help=' REST endpoint to execute, DEFAULT: groups')
+    parser.add_argument('-v', '--verb', default='GET', type=str, required=False,
+                        help=' REST verb to execute (GET or POST), DEFAULT: GET')
 
     args = parser.parse_args()
 
@@ -160,7 +169,7 @@ if __name__ == "__main__":
     elif args.action == "rest":
         try:
             output = rest(hostname=args.hostname, endpoint=args.endpoint, username=args.username,
-                          password=args.password)
+                          password=args.password, action=args.verb)
         except GenericError as e:
             log.error(e)
         else:
