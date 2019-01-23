@@ -58,7 +58,7 @@ def ssh(hostname=None, command=None, username=None, password=None,):
             _ssh.close()
 
 
-def wip_ssh_pass(hostname=None, command=None, username=None, password=None,):
+def wip_ssh_pass(hostname=None, command=None, username=None, password=None,):  # Not to be used
     _ssh = paramiko.SSHClient()
     _ssh.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
 
