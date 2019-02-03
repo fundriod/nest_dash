@@ -7,6 +7,8 @@ import socket
 import argparse
 import sys
 import log_handler
+import time
+import json
 from pprint import pprint as pp
 
 log = logging.getLogger()
@@ -81,7 +83,7 @@ def wip_ssh_pass(hostname=None, command=None, username=None, password=None,):  #
             return dict(host=hostname, data=output)
 
 
-def rest(hostname=None, endpoint=None, username=None, password=None, action=None):
+def rest(hostname=None, endpoint=None, username=None, password=None, action=None, in_data='{"operationType": "fetch"}'):
     assert hostname and endpoint and username and password, "ArrayCM.rest requires valid args"
 
     def request(url=None, headers=None, json=None, verify=False, verb=action):
@@ -100,15 +102,15 @@ def rest(hostname=None, endpoint=None, username=None, password=None, action=None
 
     def get_token():
         url = 'https://{}:5392/v1/tokens'.format(hostname)
-        data = dict(data={"username": username, "password": password})
+        _data = dict(data={"username": username, "password": password})
         try:
             # response = request(url=url, json=data)
-            response = requests.post(url, json=data, verify=False)
+            response = requests.post(url, json=_data, verify=False)
         except (TimeoutError, requests.exceptions.ConnectionError) as e:
             raise GenericError(hostname, endpoint, e)
         else:
             token = (response.json()['data']['session_token'])
-            log.debug('_rest_ url: {!r} json: {!r} token: {!r} - executed successfully.'.format(url, data, token))
+            log.debug('_rest_ url: {!r} json: {!r} token: {!r} - executed successfully.'.format(url, _data, token))
 
             return token
 
@@ -116,8 +118,10 @@ def rest(hostname=None, endpoint=None, username=None, password=None, action=None
         url = "https://{}:5392/v1/{}".format(hostname, endpoint)
         header = {'X-Auth-Token': get_token()}
         log.debug('_rest_ url: {!r} endpoint: {!r}'.format(url, endpoint))
-        response = request(url=url, headers=header, json={"operationType": "fetch"}, verb=action)
-        # pp(response)
+        _data = json.loads(in_data)
+        ep_data = dict(data=_data)
+        response = request(url=url, headers=header, json=ep_data, verb=action)
+        log.debug('_rest_ url: {!r} headers: {!r} json: {!r} - executed successfully.'.format(url, header, ep_data))
         if response.status_code == 200 or 202:
             log.info("REST:: {} with endpoint: {} - executed successfully".format(hostname, endpoint))
         return response.json()
@@ -151,7 +155,12 @@ if __name__ == "__main__":
     parser.add_argument('-v', '--verb', default='GET', type=str, required=False,
                         help=' REST verb to execute (GET or POST), DEFAULT: GET')
 
+    parser.add_argument('-d', '--data', default='{"operationType": "fetch"}', type=str, required=False,
+                        help=' DATA block / str , DEFAULT: {"operationType": "fetch"}')
+
     args = parser.parse_args()
+
+
 
     #
     # setting logger only if called direct.
@@ -169,7 +178,7 @@ if __name__ == "__main__":
     elif args.action == "rest":
         try:
             output = rest(hostname=args.hostname, endpoint=args.endpoint, username=args.username,
-                          password=args.password, action=args.verb)
+                          password=args.password, action=args.verb, in_data=args.data)
         except GenericError as e:
             log.error(e)
         else:
