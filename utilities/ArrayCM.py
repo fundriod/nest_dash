@@ -96,6 +96,14 @@ def rest(hostname=None, endpoint=None, username=None, password=None, action=None
             log.debug('_rest_post_ url: {!r} header: {!r} json: {!r}'.format(url, headers, json))
             # return requests.get(url, json=json, headers=headers, verify=verify)
             return requests.post(url, json=json, headers=headers, verify=verify)
+        elif verb.upper() == 'PUT':
+            log.debug('_rest_put_ url: {!r} header: {!r} json: {!r}'.format(url, headers, json))
+            # return requests.get(url, json=json, headers=headers, verify=verify)
+            return requests.put(url, json=json, headers=headers, verify=verify)
+        elif verb.upper() == 'DELETE':
+            log.debug('_rest_delete_ url: {!r} header: {!r} json: {!r}'.format(url, headers, json))
+            # return requests.get(url, json=json, headers=headers, verify=verify)
+            return requests.delete(url, json=json, headers=headers, verify=verify)
         else:
             log.error('_rest_invalid url: {!r} json: {!r} - failed with no request verb'.format(url, json))
             return False
